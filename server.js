@@ -8,6 +8,7 @@ const ISSUER = process.env.OIDC_ISSUER || '';
 const CLIENT_ID = process.env.OIDC_CLIENT_ID || '';
 const BASE = process.env.BASE_URL || '';
 const ALLOWED = (process.env.ALLOWED_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+const TTL = Number(process.env.SESSION_TTL_SECONDS || 3600) * 1000;
 const TEST_ROLE = 'papel-ficticio-de-teste'; // definido no servidor, so para este teste
 const b64u = (b) => Buffer.from(b).toString('base64url');
 const rnd = (n = 32) => crypto.randomBytes(n).toString('base64url');
@@ -61,7 +62,7 @@ function session(req) {
   const id = cookies(req)['__Host-sid'];
   const s = id && sessions.get(id);
   if (!s) return null;
-  if (s.exp < Date.now()) { sessions.delete(id); return null; }
+  if (s.exp < Date.now() || !ALLOWED.includes(s.email)) { sessions.delete(id); return null; }
   return s;
 }
 
@@ -98,8 +99,8 @@ async function callback(req, res, u) {
     const email = String(c.email || '').toLowerCase();
     if (!c.email || !ALLOWED.includes(email)) return html(res, 403, '<h1>Acesso negado</h1><p>Usuario nao autorizado.</p>', { 'Set-Cookie': clear });
     const sid = rnd();
-    sessions.set(sid, { email, role: TEST_ROLE, exp: Date.now() + 3600000 });
-    res.writeHead(302, { Location: '/', 'Set-Cookie': [clear, ck('sid', sid, 3600)] });
+    sessions.set(sid, { email, role: TEST_ROLE, exp: Date.now() + TTL });
+    res.writeHead(302, { Location: '/', 'Set-Cookie': [clear, ck('sid', sid, Math.floor(TTL / 1000))] });
     res.end();
   } catch (e) {
     html(res, 400, '<p>Falha na validacao do login.</p>', { 'Set-Cookie': clear });
@@ -109,7 +110,7 @@ async function callback(req, res, u) {
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const path = u.pathname;
-  if (path === '/health') return send(res, 200, { ok: true, itens: items.length, auth: !!(ISSUER && CLIENT_ID && BASE) });
+  if (path === '/health') return send(res, 200, { ok: true, auth: !!(ISSUER && CLIENT_ID && BASE) });
   if (path === '/' && req.method === 'GET') {
     const s = session(req);
     return html(res, 200, s
@@ -124,6 +125,7 @@ http.createServer((req, res) => {
     res.writeHead(302, { Location: '/', 'Set-Cookie': ck('sid', '', 0) });
     return res.end();
   }
+  if (path === '/itens' && !session(req)) return send(res, 401, { erro: 'sem sessao' });
   if (path === '/itens' && req.method === 'GET') return send(res, 200, items);
   if (path === '/itens' && req.method === 'POST') {
     let raw = '';
