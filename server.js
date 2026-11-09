@@ -107,6 +107,34 @@ async function callback(req, res, u) {
   }
 }
 
+// Teste de Mongo: so dados ficticios, so no banco fgs_teste; credenciais vem de variaveis de ambiente.
+let mclient = null;
+async function mongoTeste(s) {
+  const { MongoClient } = require('mongodb');
+  const host = process.env.MONGO_HOST, user = process.env.MONGO_USER, pass = process.env.MONGO_PASS;
+  if (!host || !user || !pass) return { erro: 'mongo nao configurado' };
+  if (!mclient) {
+    mclient = new MongoClient('mongodb+srv://' + encodeURIComponent(user) + ':' + encodeURIComponent(pass) + '@' + host + '/?retryWrites=true&w=majority', { serverSelectionTimeoutMS: 8000 });
+    await mclient.connect();
+  }
+  const out = { conectou: true };
+  const col = mclient.db('fgs_teste').collection('harness_teste');
+  const marca = 'sint-' + rnd(6);
+  await col.insertOne({ marca, texto: 'registro ficticio', por: s.role, criado: new Date() });
+  out.gravou = true;
+  const lido = await col.findOne({ marca });
+  out.leu = !!lido && lido.texto === 'registro ficticio';
+  const del = await col.deleteMany({ marca });
+  out.limpou = del.deletedCount === 1;
+  out.restantes_na_colecao = await col.countDocuments({});
+  // isolamento: escrita em outro banco deve ser negada
+  try { await mclient.db('outro_teste').collection('x').insertOne({ a: 1 }); out.escrita_outro_banco = 'PERMITIDA (problema)'; }
+  catch (e) { out.escrita_outro_banco = 'negada: ' + String(e.codeName || e.code || 'erro'); }
+  try { await mclient.db('admin').command({ listDatabases: 1, nameOnly: true }); out.listar_bancos = 'permitido (problema)'; }
+  catch (e) { out.listar_bancos = 'negado: ' + String(e.codeName || e.code || 'erro'); }
+  return out;
+}
+
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const path = u.pathname;
@@ -124,6 +152,11 @@ http.createServer((req, res) => {
     sessions.delete(cookies(req)['__Host-sid']);
     res.writeHead(302, { Location: '/', 'Set-Cookie': ck('sid', '', 0) });
     return res.end();
+  }
+  if (path === '/mongo-teste') {
+    const s = session(req);
+    if (!s) return send(res, 401, { erro: 'sem sessao' });
+    return mongoTeste(s).then((r) => send(res, 200, r)).catch((e) => send(res, 500, { erro: 'falha', codigo: String((e && (e.codeName || e.name)) || 'erro') }));
   }
   if (path === '/itens' && !session(req)) return send(res, 401, { erro: 'sem sessao' });
   if (path === '/itens' && req.method === 'GET') return send(res, 200, items);
