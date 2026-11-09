@@ -1,9 +1,16 @@
 {
-    "name": "harness-sintetico",
-    "version": "0.1.0",
-    "description": "Servico de teste sintetico. Sem dados reais.",
-    "main": "server.js",
-    "scripts": { "start": "node server.js" },
-    "engines": { "node": ">=18" },
-    "license": "MIT"
+  "name": "harness-sintetico",
+  "version": "0.1.0",
+  "description": "Servico de teste sintetico. Sem dados reais.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
 }
