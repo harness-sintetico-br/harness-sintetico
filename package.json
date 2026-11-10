@@ -7,10 +7,10 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "license": "MIT",
   "dependencies": {
-    "mongodb": "^6.10.0"
+    "mongodb": "6.22.0"
   }
 }
